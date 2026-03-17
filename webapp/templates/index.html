@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home — TennisIQ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #4ADE80;
+      --green-dim: #22c55e;
+      --bg: #080c10;
+      --surface: #0f1318;
+      --border: #1e2530;
+      --text: #f0f2f5;
+      --muted: #5a6470;
+    }
+    body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      height: 60px; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 2.5rem;
+      background: rgba(8,12,16,0.88); backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-logo { font-family: 'Anton', sans-serif; font-size: 1.5rem; letter-spacing: 3px; text-decoration: none; }
+    .nav-logo .t { color: var(--green); }
+    .nav-logo .iq { color: #fff; }
+
+    .nav-links { display: flex; align-items: center; gap: 0.2rem; }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; font-size: 0.875rem;
+      font-weight: 600; padding: 0.4rem 0.9rem; border-radius: 6px; transition: all 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-links a.active { color: var(--green); }
+    .nav-links a.logout { color: #f87171; }
+    .nav-user {
+      font-size: 0.78rem; color: var(--muted);
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      padding: 0.3rem 0.85rem; border-radius: 20px; margin-right: 0.25rem;
+    }
+
+    /* ── PLAYER DROPDOWN ── */
+    .nav-dropdown {
+      position: relative;
+    }
+    .nav-dropdown-btn {
+      display: flex; align-items: center; gap: 0.5rem;
+      color: var(--muted); background: none; border: 1px solid var(--border);
+      font-family: 'Barlow', sans-serif; font-size: 0.875rem; font-weight: 600;
+      padding: 0.4rem 0.9rem; border-radius: 6px; cursor: pointer;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .nav-dropdown-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+    .nav-dropdown-btn.has-selection { color: var(--green); border-color: rgba(74,222,128,0.4); }
+    .nav-dropdown-btn .arrow {
+      font-size: 0.6rem; transition: transform 0.2s;
+    }
+    .nav-dropdown.open .arrow { transform: rotate(180deg); }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: #0f1318;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem;
+      min-width: 280px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+      z-index: 300;
+    }
+    .nav-dropdown.open .dropdown-menu { display: block; }
+
+    .dropdown-label {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--muted);
+      padding: 0.25rem 0.5rem 0.75rem;
+    }
+
+    .dropdown-players {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+    }
+
+    .dp-card {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px; border: 1.5px solid transparent;
+      cursor: pointer; transition: all 0.2s;
+      background: rgba(255,255,255,0.03);
+    }
+    .dp-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+    .dp-card.selected { background: rgba(74,222,128,0.08); border-color: rgba(74,222,128,0.4); }
+
+    .dp-avatar {
+      width: 36px; height: 36px; border-radius: 6px;
+      overflow: hidden; flex-shrink: 0; background: var(--border);
+    }
+    .dp-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+
+    .dp-info {}
+    .dp-name { font-family: 'Anton', sans-serif; font-size: 0.78rem; letter-spacing: 0.5px; color: #fff; }
+    .dp-style { font-size: 0.65rem; color: var(--muted); margin-top: 1px; }
+
+    .dp-check {
+      margin-left: auto; color: var(--green); font-size: 0.8rem;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .dp-card.selected .dp-check { opacity: 1; }
+
+    /* ── HERO SLIDESHOW ── */
+    .hero {
+      position: relative;
+      height: 100vh; min-height: 640px;
+      overflow: hidden;
+      display: flex; align-items: flex-end;
+    }
+
+    .slide {
+      position: absolute; inset: 0;
+      background-size: cover;
+      background-position: center;
+      opacity: 0;
+      transition: opacity 1.4s ease;
+    }
+    .slide.active { opacity: 1; }
+
+    /* Dark overlay — stronger on left, lighter on right so images show */
+    .slide::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(
+        110deg,
+        rgba(8,12,16,0.93) 0%,
+        rgba(8,12,16,0.78) 30%,
+        rgba(8,12,16,0.35) 60%,
+        rgba(8,12,16,0.2) 100%
+      );
+    }
+
+    .slide-progress {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 3px; background: rgba(255,255,255,0.08); z-index: 10;
+    }
+    .slide-progress-fill {
+      height: 100%; background: var(--green); width: 0;
+      transition: width linear;
+    }
+
+    .slide-dots {
+      position: absolute; bottom: 1.5rem; right: 2rem;
+      display: flex; gap: 0.5rem; z-index: 10;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.25); cursor: pointer; transition: all 0.3s;
+    }
+    .dot.active { background: var(--green); width: 22px; border-radius: 4px; }
+
+    /* ── HERO TEXT ── */
+    .hero-content {
+      position: relative; z-index: 5;
+      padding: 0 3rem 5.5rem;
+      max-width: 580px;
+      animation: fadeUp 0.6s ease both;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
+
+    .eyebrow {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 5px;
+      text-transform: uppercase; color: var(--green); margin-bottom: 1rem;
+    }
+    .hero-title {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(3.4rem, 7vw, 6rem);
+      line-height: 0.92; letter-spacing: 2px; color: #fff;
+    }
+    .hero-title .accent { color: var(--green); }
+    .hero-desc {
+      margin-top: 1.4rem; font-size: 1rem; line-height: 1.7;
+      color: rgba(255,255,255,0.6); max-width: 440px;
+    }
+    .hero-desc strong { color: rgba(255,255,255,0.9); font-weight: 600; }
+
+    .hero-actions {
+      display: flex; gap: 0.85rem; margin-top: 2rem; flex-wrap: wrap;
+    }
+    .btn-main {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--green); color: #071209;
+      font-family: 'Anton', sans-serif; font-size: 1rem;
+      letter-spacing: 2px; padding: 0.85rem 1.75rem;
+      border-radius: 10px; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-main:hover { background: var(--green-dim); transform: translateY(-2px); box-shadow: 0 10px 30px rgba(74,222,128,0.3); }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(255,255,255,0.07); color: #fff;
+      font-family: 'Anton', sans-serif; font-size: 1rem;
+      letter-spacing: 2px; padding: 0.85rem 1.75rem;
+      border-radius: 10px; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.12); transition: all 0.2s;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.12); transform: translateY(-2px); }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      background: rgba(8,12,16,0.95); backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 3rem;
+      display: flex; align-items: center;
+    }
+    .stat { flex: 1; text-align: center; padding: 0 1rem; border-right: 1px solid var(--border); }
+    .stat:last-child { border-right: none; }
+    .stat-num { font-family: 'Anton', sans-serif; font-size: 2rem; color: var(--green); }
+    .stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-top: 2px; }
+
+    /* ── HOW IT WORKS ── */
+    .how { background: var(--surface); border-top: 1px solid var(--border); padding: 5rem 3rem; }
+    .how-inner { max-width: 1000px; margin: 0 auto; }
+    .section-label { font-family: 'Anton', sans-serif; font-size: 0.65rem; letter-spacing: 5px; color: var(--green); text-transform: uppercase; margin-bottom: 3rem; }
+    .how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 3rem; }
+    .step-num { font-family: 'Anton', sans-serif; font-size: 3.5rem; color: rgba(74,222,128,0.1); line-height: 1; margin-bottom: 0.6rem; }
+    .how-step h3 { font-family: 'Anton', sans-serif; font-size: 1rem; letter-spacing: 1.5px; margin-bottom: 0.5rem; color: #fff; }
+    .how-step p { font-size: 0.85rem; color: var(--muted); line-height: 1.65; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="{{ url_for('home') }}" class="nav-logo"><span class="t">TENNIS</span><span class="iq">IQ</span></a>
+    <div class="nav-links">
+      <a href="{{ url_for('home') }}" class="active">Home</a>
+      <a href="{{ url_for('analyse') }}">Analyse</a>
+      <a href="{{ url_for('myprogress') }}">My Progress</a>
+
+      <!-- Player Style Dropdown -->
+      <div class="nav-dropdown" id="playerDropdown">
+        <button class="nav-dropdown-btn" id="dropdownBtn" onclick="toggleDropdown()">
+          <span id="dropdownLabel">Model Style</span>
+          <span class="arrow">▼</span>
+        </button>
+        <div class="dropdown-menu">
+          <div class="dropdown-label">Choose a player to model</div>
+          <div class="dropdown-players">
+            <div class="dp-card" onclick="selectPlayer(this, 'A. Sabalenka')">
+              <div class="dp-avatar"><img src="/static/player1.png" alt="Sabalenka"></div>
+              <div class="dp-info">
+                <div class="dp-name">Sabalenka</div>
+                <div class="dp-style">Power Baseline</div>
+              </div>
+              <span class="dp-check">✓</span>
+            </div>
+            <div class="dp-card" onclick="selectPlayer(this, 'C. Alcaraz')">
+              <div class="dp-avatar"><img src="/static/player2.png" alt="Alcaraz"></div>
+              <div class="dp-info">
+                <div class="dp-name">Alcaraz</div>
+                <div class="dp-style">Explosive Serve</div>
+              </div>
+              <span class="dp-check">✓</span>
+            </div>
+            <div class="dp-card" onclick="selectPlayer(this, 'I. Swiatek')">
+              <div class="dp-avatar"><img src="/static/player3.png" alt="Swiatek"></div>
+              <div class="dp-info">
+                <div class="dp-name">Swiatek</div>
+                <div class="dp-style">Topspin Master</div>
+              </div>
+              <span class="dp-check">✓</span>
+            </div>
+            <div class="dp-card" onclick="selectPlayer(this, 'B. Shelton')">
+              <div class="dp-avatar"><img src="/static/player4.png" alt="Shelton"></div>
+              <div class="dp-info">
+                <div class="dp-name">Shelton</div>
+                <div class="dp-style">Big Serve</div>
+              </div>
+              <span class="dp-check">✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <span class="nav-user">{{ user }}</span>
+      <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+    </div>
+  </nav>
+
+  <!-- HERO SLIDESHOW -->
+  <section class="hero">
+    <div class="slide active" id="slide0"></div>
+    <div class="slide" id="slide1"></div>
+    <div class="slide" id="slide2"></div>
+    <div class="slide" id="slide3"></div>
+
+    <div class="slide-dots" id="dots"></div>
+
+    <div class="hero-content">
+      <div class="eyebrow">AI-Powered Tennis Analysis</div>
+      <h1 class="hero-title">ELEVATE<br>YOUR <span class="accent">GAME.</span></h1>
+      <p class="hero-desc">
+        TennisIQ uses <strong>computer vision & pose detection</strong> to analyse your tennis technique instantly.
+        Upload a clip of your serve, forehand, or backhand — and get detailed feedback on your
+        form, body mechanics, and swing path.<br><br>
+        <strong>See exactly what your coach sees.</strong>
+      </p>
+      <div class="hero-actions">
+        <a href="{{ url_for('analyse') }}" class="btn-main">🎥 UPLOAD VIDEO</a>
+        <a href="{{ url_for('analyse') }}" class="btn-ghost">📸 UPLOAD IMAGE</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-num">33</div><div class="stat-label">Body Points Tracked</div></div>
+    <div class="stat"><div class="stat-num">60fps</div><div class="stat-label">Frame Analysis</div></div>
+    <div class="stat"><div class="stat-num">4</div><div class="stat-label">Shot Types</div></div>
+    <div class="stat"><div class="stat-num">100%</div><div class="stat-label">AI Powered</div></div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <section class="how">
+    <div class="how-inner">
+      <div class="section-label">How it works</div>
+      <div class="how-grid">
+        <div class="how-step"><div class="step-num">01</div><h3>RECORD YOUR SHOT</h3><p>Film yourself from the side or front. Any camera works — your phone is perfect.</p></div>
+        <div class="how-step"><div class="step-num">02</div><h3>UPLOAD YOUR FILE</h3><p>Upload a video or photo directly to TennisIQ. We handle the rest automatically.</p></div>
+        <div class="how-step"><div class="step-num">03</div><h3>AI POSE DETECTION</h3><p>Our MediaPipe engine maps 33 body landmarks per frame to capture your exact mechanics.</p></div>
+        <div class="how-step"><div class="step-num">04</div><h3>GET YOUR FEEDBACK</h3><p>Receive a clear breakdown of your posture, racket path, and footwork with tips to improve.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // ── Load images via JS to avoid Jinja path issues ──
+    const imagePaths = [
+      '/static/player1.png',
+      '/static/player2.png',
+      '/static/player3.png',
+      '/static/player4.png'
+    ];
+
+    imagePaths.forEach((path, i) => {
+      document.getElementById('slide' + i).style.backgroundImage = `url('${path}')`;
+    });
+
+    // ── Slideshow ──
+    const slides = document.querySelectorAll('.slide');
+    const dotsEl = document.getElementById('dots');
+    const fill = document.getElementById('progressFill');
+    const DURATION = 2000;
+    let current = 0, timer;
+
+    slides.forEach((_, i) => {
+      const d = document.createElement('div');
+      d.className = 'dot' + (i === 0 ? ' active' : '');
+      d.onclick = () => goTo(i);
+      dotsEl.appendChild(d);
+    });
+
+    function goTo(n) {
+      slides[current].classList.remove('active');
+      dotsEl.children[current].classList.remove('active');
+      current = n;
+      slides[current].classList.add('active');
+      dotsEl.children[current].classList.add('active');
+      resetProgress();
+    }
+
+    function resetProgress() {
+      fill.style.transition = 'none';
+      fill.style.width = '0%';
+      setTimeout(() => {
+        fill.style.transition = `width ${DURATION}ms linear`;
+        fill.style.width = '100%';
+      }, 30);
+    }
+
+    function startAuto() {
+      clearInterval(timer);
+      timer = setInterval(() => goTo((current + 1) % slides.length), DURATION);
+      resetProgress();
+    }
+
+    startAuto();
+
+    // ── Dropdown ──
+    function toggleDropdown() {
+      document.getElementById('playerDropdown').classList.toggle('open');
+    }
+
+    function selectPlayer(el, name) {
+      document.querySelectorAll('.dp-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      const btn = document.getElementById('dropdownBtn');
+      document.getElementById('dropdownLabel').textContent = name;
+      btn.classList.add('has-selection');
+      document.getElementById('playerDropdown').classList.remove('open');
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('playerDropdown').contains(e.target)) {
+        document.getElementById('playerDropdown').classList.remove('open');
+      }
+    });
+  </script>
+</body>
+</html>

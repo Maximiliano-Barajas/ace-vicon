@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Progress — TennisIQ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #4ADE80; --green-dim: #22c55e;
+      --bg: #080c10; --surface: #0f1318; --surface2: #161c24;
+      --border: #1e2530; --text: #f0f2f5; --muted: #5a6470;
+    }
+    body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* NAV */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      height: 60px; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 2.5rem;
+      background: rgba(8,12,16,0.92); backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .nav-logo { font-family: 'Anton', sans-serif; font-size: 1.5rem; letter-spacing: 3px; text-decoration: none; }
+    .nav-logo .t { color: var(--green); } .nav-logo .iq { color: #fff; }
+    .nav-links { display: flex; align-items: center; gap: 0.2rem; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.875rem; font-weight: 600; padding: 0.4rem 0.9rem; border-radius: 6px; transition: all 0.2s; }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-links a.active { color: var(--green); }
+    .nav-links a.logout { color: #f87171; }
+    .nav-user { font-size: 0.78rem; color: var(--muted); background: rgba(255,255,255,0.04); border: 1px solid var(--border); padding: 0.3rem 0.85rem; border-radius: 20px; margin-right: 0.25rem; }
+
+    /* PAGE */
+    .page { padding-top: 60px; }
+
+    /* BANNER */
+    .banner {
+      background: linear-gradient(135deg, #0d1a2e 0%, #0f1318 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 3rem 3rem 2.5rem;
+    }
+    .eyebrow { font-size: 0.65rem; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; color: var(--green); margin-bottom: 0.75rem; }
+    .page-title { font-family: 'Anton', sans-serif; font-size: 3rem; letter-spacing: 2px; line-height: 1; }
+    .page-sub { color: var(--muted); font-size: 0.95rem; margin-top: 0.5rem; }
+
+    /* CONTENT */
+    .content { padding: 2.5rem 3rem 4rem; max-width: 1100px; }
+
+    /* STATS ROW */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1rem; margin-bottom: 2rem;
+      animation: fadeUp 0.5s ease both;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.5rem;
+    }
+    .stat-card-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+    .stat-card-val { font-family: 'Anton', sans-serif; font-size: 2.8rem; color: var(--green); line-height: 1; }
+    .stat-card-sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
+
+    /* CHART */
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 1.75rem;
+      margin-bottom: 2rem;
+      animation: fadeUp 0.5s ease 0.1s both;
+    }
+    .card-title { font-family: 'Anton', sans-serif; font-size: 1rem; letter-spacing: 2px; margin-bottom: 1.5rem; color: #fff; }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* EMPTY STATE */
+    .empty {
+      text-align: center; padding: 5rem 2rem;
+      animation: fadeUp 0.5s ease both;
+    }
+    .empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .empty h3 { font-family: 'Anton', sans-serif; font-size: 1.8rem; letter-spacing: 2px; margin-bottom: 0.5rem; }
+    .empty p { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+    .btn-go {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--green); color: #071209;
+      font-family: 'Anton', sans-serif; font-size: 1rem;
+      letter-spacing: 2px; padding: 0.85rem 1.75rem;
+      border-radius: 10px; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-go:hover { background: var(--green-dim); transform: translateY(-2px); }
+
+    /* SESSION LIST */
+    .sessions-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      animation: fadeUp 0.5s ease 0.2s both;
+    }
+    .sessions-header {
+      padding: 1.25rem 1.75rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sessions-header .card-title { margin-bottom: 0; }
+    .sessions-count { font-size: 0.78rem; color: var(--muted); background: var(--surface2); padding: 0.25rem 0.75rem; border-radius: 20px; border: 1px solid var(--border); }
+
+    .session-row {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr 1.2fr 80px;
+      align-items: center;
+      padding: 1.1rem 1.75rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+      gap: 1rem;
+    }
+    .session-row:last-child { border-bottom: none; }
+    .session-row:hover { background: rgba(255,255,255,0.02); }
+
+    .session-file { font-size: 0.875rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-date { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+    .session-player { display: flex; align-items: center; gap: 0.6rem; }
+    .player-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+    .player-name-text { font-size: 0.82rem; font-weight: 600; }
+    .player-style-text { font-size: 0.72rem; color: var(--muted); }
+
+    .session-type { font-size: 0.72rem; color: var(--muted); }
+
+    .score-badge {
+      font-family: 'Anton', sans-serif; font-size: 1.2rem;
+      text-align: right; letter-spacing: 1px;
+    }
+    .score-badge.high { color: #4ADE80; }
+    .score-badge.mid  { color: #facc15; }
+    .score-badge.low  { color: #f87171; }
+    .score-badge span { font-family: 'Barlow', sans-serif; font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+
+    /* Table header */
+    .session-row.header {
+      background: var(--surface2);
+      padding: 0.65rem 1.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .session-row.header div { font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('home') }}" class="nav-logo"><span class="t">TENNIS</span><span class="iq">IQ</span></a>
+    <div class="nav-links">
+      <a href="{{ url_for('home') }}">Home</a>
+      <a href="{{ url_for('analyse') }}">Analyse</a>
+      <a href="{{ url_for('myprogress') }}" class="active">My Progress</a>
+      <span class="nav-user">{{ user }}</span>
+      <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="banner">
+      <div class="eyebrow">Your Journey</div>
+      <h1 class="page-title">MY PROGRESS</h1>
+      <p class="page-sub">Track your serve technique over time.</p>
+    </div>
+
+    <div class="content">
+
+      {% if sessions %}
+
+        <!-- STATS ROW -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-card-label">Total Sessions</div>
+            <div class="stat-card-val">{{ total_sessions }}</div>
+            <div class="stat-card-sub">serves analysed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Average Score</div>
+            <div class="stat-card-val">{{ avg_score }}</div>
+            <div class="stat-card-sub">out of 10</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Best Score</div>
+            <div class="stat-card-val">{{ best_score }}</div>
+            <div class="stat-card-sub">personal best</div>
+          </div>
+        </div>
+
+        <!-- CHART -->
+        {% if total_sessions > 1 %}
+        <div class="chart-card">
+          <div class="card-title">SCORE OVER TIME</div>
+          <div class="chart-wrap">
+            <canvas id="scoreChart"></canvas>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- SESSION LIST -->
+        <div class="sessions-card">
+          <div class="sessions-header">
+            <div class="card-title">SESSION HISTORY</div>
+            <div class="sessions-count">{{ total_sessions }} session{{ 's' if total_sessions != 1 }}</div>
+          </div>
+          <div class="session-row header">
+            <div>File</div>
+            <div>Reference Player</div>
+            <div>Date</div>
+            <div style="text-align:right">Score</div>
+          </div>
+          {% for s in sessions %}
+          {% set score_class = 'high' if s.score >= 7.5 else ('mid' if s.score >= 5.5 else 'low') %}
+          <div class="session-row">
+            <div>
+              <div class="session-file">{{ s.filename }}</div>
+              <div class="session-date">{{ s.created_at }}</div>
+            </div>
+            <div class="session-player">
+              <div class="player-dot"></div>
+              <div>
+                <div class="player-name-text">{{ s.player_name }}</div>
+                <div class="player-style-text">{{ s.player_style }}</div>
+              </div>
+            </div>
+            <div class="session-type">
+              {% if s.filename.lower().endswith(('.mp4','.mov','.avi','.mkv')) %}
+                🎥 Video
+              {% else %}
+                📸 Image
+              {% endif %}
+            </div>
+            <div class="score-badge {{ score_class }}">
+              {{ s.score }}<span>/10</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+      {% else %}
+        <!-- EMPTY STATE -->
+        <div class="empty">
+          <div class="empty-icon">🎾</div>
+          <h3>NO SESSIONS YET</h3>
+          <p>You haven't analysed any serves yet. Upload your first video or image to start tracking your progress.</p>
+          <a href="{{ url_for('analyse') }}" class="btn-go">ANALYSE YOUR FIRST SERVE →</a>
+        </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  {% if total_sessions > 1 %}
+  <script>
+    const labels = {{ chart_labels | safe }};
+    const scores = {{ chart_scores | safe }};
+
+    const ctx = document.getElementById('scoreChart').getContext('2d');
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0, 'rgba(74, 222, 128, 0.3)');
+    gradient.addColorStop(1, 'rgba(74, 222, 128, 0.0)');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Score',
+          data: scores,
+          borderColor: '#4ADE80',
+          backgroundColor: gradient,
+          borderWidth: 2.5,
+          pointBackgroundColor: '#4ADE80',
+          pointBorderColor: '#080c10',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0f1318',
+            borderColor: '#1e2530',
+            borderWidth: 1,
+            titleColor: '#4ADE80',
+            bodyColor: '#f0f2f5',
+            callbacks: {
+              label: ctx => ` Score: ${ctx.parsed.y} / 10`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#5a6470', font: { family: 'Barlow', size: 11 } }
+          },
+          y: {
+            min: 0, max: 10,
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#5a6470', font: { family: 'Barlow', size: 11 },
+              stepSize: 2
+            }
+          }
+        }
+      }
+    });
+  </script>
+  {% endif %}
+
+</body>
+</html>
