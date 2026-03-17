@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — TennisIQ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #4ADE80;
+      --green-dim: #22c55e;
+      --court: #1a4731;
+      --bg: #0f0f0f;
+      --panel: #141414;
+      --border: #252525;
+      --text: #f5f5f5;
+      --muted: #777;
+    }
+    body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+    /* LEFT */
+    .left {
+      width: 50%;
+      background: var(--court);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 3rem;
+    }
+    .left::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(255,255,255,0.06) 59px, rgba(255,255,255,0.06) 61px),
+        repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(255,255,255,0.06) 59px, rgba(255,255,255,0.06) 61px);
+    }
+    .court-border {
+      position: absolute;
+      top: 8%; bottom: 8%; left: 6%; right: 6%;
+      border: 3px solid rgba(255,255,255,0.15);
+      pointer-events: none;
+    }
+    .court-mid {
+      position: absolute;
+      top: 8%; bottom: 8%;
+      left: 50%; width: 3px;
+      background: rgba(255,255,255,0.12);
+      transform: translateX(-50%);
+    }
+    .court-service {
+      position: absolute;
+      top: 8%; bottom: 54%;
+      left: 6%; right: 6%;
+      border-bottom: 3px solid rgba(255,255,255,0.12);
+    }
+    .ball {
+      position: absolute;
+      top: 20%;
+      right: 18%;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 32%, #d9f03c, #a0b820);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 -4px 12px rgba(0,0,0,0.2);
+      animation: float 3.5s ease-in-out infinite;
+    }
+    .ball::before {
+      content: '';
+      position: absolute;
+      top: 24%; left: 10%; right: 10%; height: 2.5px;
+      border-radius: 50%; background: rgba(255,255,255,0.35);
+      transform: rotate(-22deg);
+    }
+    .ball::after {
+      content: '';
+      position: absolute;
+      top: 42%; left: 10%; right: 10%; height: 2.5px;
+      border-radius: 50%; background: rgba(255,255,255,0.35);
+      transform: rotate(22deg);
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(10deg); }
+    }
+    .left-content { position: relative; z-index: 2; }
+    .brand {
+      font-family: 'Anton', sans-serif;
+      font-size: 5rem;
+      letter-spacing: 4px;
+      line-height: 1;
+      color: #fff;
+      text-shadow: 0 4px 30px rgba(0,0,0,0.6);
+    }
+    .brand em { color: var(--green); font-style: normal; }
+    .tagline {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-top: 0.75rem;
+    }
+
+    /* RIGHT */
+    .right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .form-box {
+      width: 100%;
+      max-width: 380px;
+      animation: slideUp 0.45s ease both;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .form-header { margin-bottom: 2rem; }
+    .form-header h2 {
+      font-family: 'Anton', sans-serif;
+      font-size: 2.6rem;
+      letter-spacing: 2px;
+      line-height: 1;
+    }
+    .form-header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
+
+    .form-group { margin-bottom: 1.1rem; }
+    .form-group label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    .form-group input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      padding: 0.85rem 1rem;
+      font-family: 'Barlow', sans-serif;
+      font-size: 1rem;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .form-group input:focus { border-color: var(--green); background: #111d15; }
+    .form-group input::placeholder { color: #3a3a3a; }
+
+    .btn-submit {
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 1rem;
+      background: var(--green);
+      color: #071209;
+      font-family: 'Anton', sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: 3px;
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-submit:hover {
+      background: var(--green-dim);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(74,222,128,0.28);
+    }
+    .btn-submit:active { transform: translateY(0); }
+
+    .switch {
+      text-align: center;
+      margin-top: 1.75rem;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    .switch a { color: var(--green); text-decoration: none; font-weight: 600; }
+    .switch a:hover { color: #fff; }
+
+    .flash {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #fca5a5;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (max-width: 680px) {
+      .left { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="left">
+    <div class="court-border"></div>
+    <div class="court-mid"></div>
+    <div class="court-service"></div>
+    <div class="ball"></div>
+    <div class="left-content">
+      <div class="brand">TENNIS<em>IQ</em></div>
+      <div class="tagline">Analyse · Improve · Dominate</div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="form-box">
+      <div class="form-header">
+        <h2>SIGN IN</h2>
+        <p>Welcome back — let's get to work.</p>
+      </div>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}{% for msg in messages %}
+          <div class="flash">⚠ {{ msg }}</div>
+        {% endfor %}{% endif %}
+      {% endwith %}
+
+      <form method="POST">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" placeholder="your_username" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-submit">LET'S GO →</button>
+      </form>
+
+      <div class="switch">
+        No account yet? <a href="{{ url_for('register') }}">Create one free</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
