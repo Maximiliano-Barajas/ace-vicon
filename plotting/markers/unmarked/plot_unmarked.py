@@ -18,6 +18,7 @@ from load_unmarked import load_unmarked_csv
 # Marker 11 (Track 561) = lime (right hip)
 # Marker 12 (Track 562) = coral (left hand)
 # Marker 13 (Track 568) = teal (left hip)
+# Marker 14 = (right foot)
 
 COLORS = [
     "darkgreen",
@@ -35,7 +36,7 @@ COLORS = [
     "teal",
 ]
 
-csv_path = os.path.join(os.path.dirname(__file__), "serve3.csv")
+csv_path = os.path.join(os.path.dirname(__file__), "serve4.csv")
 data = load_unmarked_csv(csv_path)
 
 marker_names = [k for k in data if k != "frames"]
