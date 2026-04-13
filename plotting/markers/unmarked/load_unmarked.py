@@ -20,6 +20,23 @@ def load_unmarked_csv(filepath):
     """
     raw = pd.read_csv(filepath, header=None, dtype=str)
 
+    # Anatomical labels in marker order (1-indexed positions)
+    anatomical_labels = [
+        'head',           # Marker 1
+        'left_shoulder',  # Marker 2
+        'right_elbow',    # Marker 3
+        'left_elbow',     # Marker 4
+        'chest',          # Marker 5
+        'right_shoulder', # Marker 6
+        'right_knee',     # Marker 7
+        'right_hand',     # Marker 8
+        'left_foot',      # Marker 9
+        'left_knee',      # Marker 10
+        'right_hip',      # Marker 11
+        'left_hand',      # Marker 12
+        'left_hip',       # Marker 13
+    ]
+
     # Extract marker names from row 0 (col 2, 5, 8, ... — every 3rd col)
     n_cols = raw.shape[1]
     n_markers = (n_cols - 2) // 3
@@ -28,7 +45,10 @@ def load_unmarked_csv(filepath):
         col_idx = 2 + i * 3
         name = raw.iat[0, col_idx]
         if pd.isna(name) or str(name).strip() == '':
-            name = f'Marker_{i + 1}'
+            if i < len(anatomical_labels):
+                name = anatomical_labels[i]
+            else:
+                name = f'Marker_{i + 1}'
         marker_names.append(str(name).strip())
 
     # Skip the 3 header rows; remaining rows are data

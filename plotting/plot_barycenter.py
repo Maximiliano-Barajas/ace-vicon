@@ -1,11 +1,11 @@
 import sys
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'dtw'))
-from load_data import load_multi_serve
+from constants import MARKER_ORDER
 
 bones = [
     ("head", "chest"),
@@ -25,35 +25,29 @@ bones = [
     ("right_knee", "right_foot"),
 ]
 
-# Accept a serve name as an optional command-line argument, e.g. "serve5"
-serve_name = sys.argv[1] if len(sys.argv) > 1 else "serve3"
-csv_path = os.path.join(
-    os.path.dirname(__file__),
-    "markers", "unmarked_edited", f"{serve_name}.csv"
-)
-if not os.path.exists(csv_path):
-    print(f"File not found: {csv_path}")
-    sys.exit(1)
+# ---------------------------------------------------------------------------
+# Load barycenter and reconstruct marker dict
+# ---------------------------------------------------------------------------
+npy_path = os.path.join(os.path.dirname(__file__), '..', 'dtw', 'barycenter.npy')
+barycenter = np.load(npy_path)           # shape (n_frames, n_markers * 3)
+n_frames = barycenter.shape[0]
 
-markers = load_multi_serve(csv_path)
-frames = markers["frames"]
-n_frames = len(frames)
-marker_names = [k for k in markers if k != "frames"]
+# Slice columns back into per-marker TX/TY/TZ arrays
+markers = {}
+for i, name in enumerate(MARKER_ORDER):
+    c = i * 3
+    markers[name] = {
+        'TX': barycenter[:, c],
+        'TY': barycenter[:, c + 1],
+        'TZ': barycenter[:, c + 2],
+    }
 
-
-def get_pos(joint, frame_idx):
-    m = markers[joint]
-    return float(m["TX"][frame_idx]), float(m["TY"][frame_idx]), float(m["TZ"][frame_idx])
-
-
-# Fixed axis limits based on full data range
-all_x = np.concatenate([markers[m]["TX"] for m in marker_names])
-all_y = np.concatenate([markers[m]["TY"] for m in marker_names])
-all_z = np.concatenate([markers[m]["TZ"] for m in marker_names])
-
-all_x = all_x[~np.isnan(all_x)]
-all_y = all_y[~np.isnan(all_y)]
-all_z = all_z[~np.isnan(all_z)]
+# ---------------------------------------------------------------------------
+# Fixed axis limits
+# ---------------------------------------------------------------------------
+all_x = barycenter[:, 0::3].ravel()
+all_y = barycenter[:, 1::3].ravel()
+all_z = barycenter[:, 2::3].ravel()
 
 
 def padded_limits(data, pad=0.08):
@@ -71,7 +65,7 @@ y_range = y_lim[1] - y_lim[0]
 z_range = z_lim[1] - z_lim[0]
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
+ax = fig.add_subplot(111, projection='3d')
 
 
 def apply_axes():
@@ -79,22 +73,27 @@ def apply_axes():
     ax.set_ylim(*y_lim)
     ax.set_zlim(*z_lim)
     ax.set_box_aspect([x_range, y_range, z_range])
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
 
 apply_axes()
 
 
+def get_pos(joint, frame_idx):
+    m = markers[joint]
+    return float(m['TX'][frame_idx]), float(m['TY'][frame_idx]), float(m['TZ'][frame_idx])
+
+
 def update(frame_idx):
     ax.cla()
     apply_axes()
-    ax.set_title(f"{serve_name}  —  Frame {int(frames[frame_idx])}")
+    ax.set_title(f'DTW Barycenter (average serve) — frame {frame_idx + 1} / {n_frames}')
 
-    for joint in marker_names:
+    for joint in markers:
         x, y, z = get_pos(joint, frame_idx)
-        if not (np.isnan(x) or np.isnan(y) or np.isnan(z)):
+        if not any(np.isnan(v) for v in [x, y, z]):
             ax.scatter(x, y, z, s=20)
 
     for start, end in bones:
@@ -104,7 +103,7 @@ def update(frame_idx):
         x1, y1, z1 = get_pos(end, frame_idx)
         if any(np.isnan(v) for v in [x0, y0, z0, x1, y1, z1]):
             continue
-        ax.plot([x0, x1], [y0, y1], [z0, z1], "b-", linewidth=1.5)
+        ax.plot([x0, x1], [y0, y1], [z0, z1], 'b-', linewidth=1.5)
 
 
 ani = animation.FuncAnimation(fig, update, frames=n_frames, interval=33, repeat=True)

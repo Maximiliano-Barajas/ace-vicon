@@ -4,39 +4,27 @@ import numpy as np
 import os
 from load_unmarked import load_unmarked_csv
 
-# COLOR KEY (assigned by marker index order in the CSV)
-# Marker 1  (Track 445) = darkgreen (head)
-# Marker 2  (Track 450) = red (left shoulder)
-# Marker 3  (Track 467) = blue (right elbow)
-# Marker 4  (Track 496) = orange (left elbow)
-# Marker 5  (Track 510) = purple (chest)
-# Marker 6  (Track 529) = brown (right shoulder)
-# Marker 7  (Track 538) = deeppink (right knee)
-# Marker 8  (Track 539) = cyan (right hand)
-# Marker 9  (Track 552) = gold (left foot)
-# Marker 10 (Track 555) = navy (left knee)
-# Marker 11 (Track 561) = lime (right hip)
-# Marker 12 (Track 562) = coral (left hand)
-# Marker 13 (Track 568) = teal (left hip)
-# Marker 14 = (right foot)
 
-COLORS = [
-    "darkgreen",
-    "red",
-    "blue",
-    "orange",
-    "purple",
-    "brown",
-    "deeppink",
-    "cyan",
-    "gold",
-    "navy",
-    "lime",
-    "coral",
-    "teal",
+bones = [
+    ("head", "chest"),
+    ("chest", "left_shoulder"),
+    ("chest", "right_shoulder"),
+    ("left_shoulder", "left_elbow"),
+    ("left_shoulder", "right_shoulder"),
+    ("left_elbow", "left_hand"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_hand"),
+    ("left_hip", "right_hip"),
+    ("chest", "left_hip"),
+    ("chest", "right_hip"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_foot"),
+    ("right_hip", "right_knee"),
 ]
 
-csv_path = os.path.join(os.path.dirname(__file__), "serve4.csv")
+csv_path = os.path.join(
+    os.path.dirname(__file__), "..", "unmarked_edited", "serve2.csv"
+)
 data = load_unmarked_csv(csv_path)
 
 marker_names = [k for k in data if k != "frames"]
@@ -81,16 +69,31 @@ def update(frame_idx):
     apply_axes()
     ax.set_title(f'Frame {int(data["frames"][frame_idx])}')
 
-    for i, name in enumerate(marker_names):
+    # Draw markers
+    for name in marker_names:
         x = data[name]["TX"][frame_idx]
         y = data[name]["TY"][frame_idx]
         z = data[name]["TZ"][frame_idx]
         if not (np.isnan(x) or np.isnan(y) or np.isnan(z)):
-            ax.scatter(
-                x, y, z, s=40, color=COLORS[i % len(COLORS)], label=f"Marker {i + 1}"
-            )
+            ax.scatter(x, y, z, s=20)
 
-    ax.legend(loc="upper left", fontsize=7)
+    # Draw bones
+    for start, end in bones:
+        if start not in data or end not in data:
+            continue
+        x0, y0, z0 = (
+            data[start]["TX"][frame_idx],
+            data[start]["TY"][frame_idx],
+            data[start]["TZ"][frame_idx],
+        )
+        x1, y1, z1 = (
+            data[end]["TX"][frame_idx],
+            data[end]["TY"][frame_idx],
+            data[end]["TZ"][frame_idx],
+        )
+        if any(np.isnan(v) for v in [x0, y0, z0, x1, y1, z1]):
+            continue
+        ax.plot([x0, x1], [y0, y1], [z0, z1], "b-", linewidth=1.5)
 
 
 apply_axes()
