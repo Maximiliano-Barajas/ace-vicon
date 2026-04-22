@@ -2,6 +2,23 @@ import pandas as pd
 
 from constants import MARKER_ORDER
 
+FILENAME_TO_MARKER = {
+    "chest": "chest",
+    "head": "head",
+    "leftelbow": "left_elbow",
+    "leftfoot": "left_foot",
+    "lefthand": "left_hand",
+    "lefthip": "left_hip",
+    "leftknee": "left_knee",
+    "leftshoulder": "left_shoulder",
+    "rightelbow": "right_elbow",
+    "rightfoot": "right_foot",
+    "righthand": "right_hand",
+    "righthip": "right_hip",
+    "rightknee": "right_knee",
+    "rightshoulder": "right_shoulder",
+}
+
 
 def load_single_serve(serve_dict):
     """Load a serve exported as one CSV file per marker.

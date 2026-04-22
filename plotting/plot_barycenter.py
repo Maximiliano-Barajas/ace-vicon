@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'dtw'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dtw"))
 from constants import MARKER_ORDER
 
 bones = [
@@ -28,8 +28,8 @@ bones = [
 # ---------------------------------------------------------------------------
 # Load barycenter and reconstruct marker dict
 # ---------------------------------------------------------------------------
-npy_path = os.path.join(os.path.dirname(__file__), '..', 'dtw', 'barycenter.npy')
-barycenter = np.load(npy_path)           # shape (n_frames, n_markers * 3)
+npy_path = os.path.join(os.path.dirname(__file__), "..", "dtw", "barycenter2.npy")
+barycenter = np.load(npy_path)  # shape (n_frames, n_markers * 3)
 n_frames = barycenter.shape[0]
 
 # Slice columns back into per-marker TX/TY/TZ arrays
@@ -37,9 +37,9 @@ markers = {}
 for i, name in enumerate(MARKER_ORDER):
     c = i * 3
     markers[name] = {
-        'TX': barycenter[:, c],
-        'TY': barycenter[:, c + 1],
-        'TZ': barycenter[:, c + 2],
+        "TX": barycenter[:, c],
+        "TY": barycenter[:, c + 1],
+        "TZ": barycenter[:, c + 2],
     }
 
 # ---------------------------------------------------------------------------
@@ -64,32 +64,53 @@ x_range = x_lim[1] - x_lim[0]
 y_range = y_lim[1] - y_lim[0]
 z_range = z_lim[1] - z_lim[0]
 
+zoom_level = 1.0  # < 1 zooms in, > 1 zooms out; use +/= and - keys
+
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(111, projection="3d")
 
 
 def apply_axes():
-    ax.set_xlim(*x_lim)
-    ax.set_ylim(*y_lim)
-    ax.set_zlim(*z_lim)
-    ax.set_box_aspect([x_range, y_range, z_range])
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
+    cx = (x_lim[0] + x_lim[1]) / 2
+    cy = (y_lim[0] + y_lim[1]) / 2
+    cz = (z_lim[0] + z_lim[1]) / 2
+    hx = x_range / 2 * zoom_level
+    hy = y_range / 2 * zoom_level
+    hz = z_range / 2 * zoom_level
+    ax.set_xlim(cx - hx, cx + hx)
+    ax.set_ylim(cy - hy, cy + hy)
+    ax.set_zlim(cz - hz, cz + hz)
+    ax.set_box_aspect([hx * 2, hy * 2, hz * 2])
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
 
 
+def on_key(event):
+    global zoom_level
+    if event.key in ("+", "="):
+        zoom_level *= 0.8
+    elif event.key == "-":
+        zoom_level /= 0.8
+
+
+fig.canvas.mpl_connect("key_press_event", on_key)
 apply_axes()
 
 
 def get_pos(joint, frame_idx):
     m = markers[joint]
-    return float(m['TX'][frame_idx]), float(m['TY'][frame_idx]), float(m['TZ'][frame_idx])
+    return (
+        float(m["TX"][frame_idx]),
+        float(m["TY"][frame_idx]),
+        float(m["TZ"][frame_idx]),
+    )
 
 
 def update(frame_idx):
     ax.cla()
     apply_axes()
-    ax.set_title(f'DTW Barycenter (average serve) — frame {frame_idx + 1} / {n_frames}')
+    ax.set_title(f"DTW Barycenter (average serve) — frame {frame_idx + 1} / {n_frames}")
 
     for joint in markers:
         x, y, z = get_pos(joint, frame_idx)
@@ -103,7 +124,7 @@ def update(frame_idx):
         x1, y1, z1 = get_pos(end, frame_idx)
         if any(np.isnan(v) for v in [x0, y0, z0, x1, y1, z1]):
             continue
-        ax.plot([x0, x1], [y0, y1], [z0, z1], 'b-', linewidth=1.5)
+        ax.plot([x0, x1], [y0, y1], [z0, z1], "b-", linewidth=1.5)
 
 
 ani = animation.FuncAnimation(fig, update, frames=n_frames, interval=33, repeat=True)

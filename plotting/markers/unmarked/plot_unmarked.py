@@ -29,6 +29,7 @@ data = load_unmarked_csv(csv_path)
 
 marker_names = [k for k in data if k != "frames"]
 n_frames = len(data["frames"])
+print("Loaded marker names:", marker_names)
 
 # Axis limits from all frames across all markers
 all_x = np.concatenate([data[m]["TX"] for m in marker_names])

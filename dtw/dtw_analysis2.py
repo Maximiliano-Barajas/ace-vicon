@@ -7,9 +7,10 @@ from scipy.spatial.distance import cdist
 from prepare_data import load_prepared_serves
 
 DATA_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "plotting", "markers", "unmarked_edited"
+    os.path.dirname(__file__), "..", "plotting", "markers", "individual"
 )
-OUT_PATH = os.path.join(os.path.dirname(__file__), "barycenter.npy")
+OUT_PATH = os.path.join(os.path.dirname(__file__), "barycenter2.npy")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "barycenter2.csv")
 
 
 def _dba_update(barycenter, arrays):
@@ -37,18 +38,21 @@ def _dba_update(barycenter, arrays):
     return new_bc
 
 
-def compute_barycenter(dirpath=DATA_DIR, out_path=OUT_PATH, n_iter=30):
-    """Load all serves, compute the DTW barycenter via DBA, and save it.
+def compute_barycenter(
+    dirpath=DATA_DIR, out_path=OUT_PATH, csv_path=CSV_PATH, n_iter=30
+):
+    """Load all serves, compute the DTW barycenter via DBA with dtw-python, and save it.
 
     Args:
         dirpath: folder of multi-marker Vicon CSVs (unmarked_edited)
         out_path: .npy file to write the barycenter to
+        csv_path: .csv file to write the barycenter to
         n_iter: number of DBA iterations (default 30)
 
     Returns:
         barycenter as np.ndarray of shape (n_frames, n_features)
     """
-    arrays = load_prepared_serves(dirpath)
+    arrays = load_prepared_serves(dirpath, multi=False, skip_trim=True)
     print(f"Loaded {len(arrays)} valid serves")
 
     # Initialise with the series closest to the median length to avoid
@@ -64,6 +68,9 @@ def compute_barycenter(dirpath=DATA_DIR, out_path=OUT_PATH, n_iter=30):
     print(f"Barycenter shape: {barycenter.shape}")
     np.save(out_path, barycenter)
     print(f"Saved to {out_path}")
+
+    np.savetxt(csv_path, barycenter, delimiter=",")
+    print(f"Saved to {csv_path}")
 
     return barycenter
 

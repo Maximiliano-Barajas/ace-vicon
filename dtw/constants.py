@@ -12,4 +12,5 @@ MARKER_ORDER = [
     "right_hip",      # Marker 11
     "left_hand",      # Marker 12
     "left_hip",       # Marker 13
+    "right_foot",     # Marker 14
 ]
