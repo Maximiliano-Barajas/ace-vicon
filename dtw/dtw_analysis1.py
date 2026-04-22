@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from tslearn.barycenters import dtw_barycenter_averaging
+from tslearn.barycenters import softdtw_barycenter
 
 from prepare_data import load_prepared_serves
 
@@ -26,7 +27,7 @@ def compute_barycenter(dirpath=DATA_DIR, out_path=OUT_PATH, csv_path=CSV_PATH):
     arrays = load_prepared_serves(dirpath, multi=False, skip_trim=True)
     print(f"Loaded {len(arrays)} valid serves")
 
-    barycenter = dtw_barycenter_averaging(arrays)
+    barycenter = softdtw_barycenter(arrays)
     print(f"Barycenter shape: {barycenter.shape}")
 
     np.save(out_path, barycenter)

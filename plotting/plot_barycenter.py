@@ -28,7 +28,7 @@ bones = [
 # ---------------------------------------------------------------------------
 # Load barycenter and reconstruct marker dict
 # ---------------------------------------------------------------------------
-npy_path = os.path.join(os.path.dirname(__file__), "..", "dtw", "barycenter2.npy")
+npy_path = os.path.join(os.path.dirname(__file__), "..", "dtw", "barycenter1.npy")
 barycenter = np.load(npy_path)  # shape (n_frames, n_markers * 3)
 n_frames = barycenter.shape[0]
 
