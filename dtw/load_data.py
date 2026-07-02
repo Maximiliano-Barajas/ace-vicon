@@ -17,6 +17,7 @@ def _load_marker_order(csv_path):
     spec.loader.exec_module(mod)
     return mod.MARKER_ORDER
 
+
 FILENAME_TO_MARKER = {
     "chest": "chest",
     "head": "head",
@@ -74,9 +75,9 @@ def load_single_serve(serve_dict):
 
 def load_multi_serve(filepath):
     """Load a serve from a single CSV file containing all markers.
-    (like data in plotting/markers/unmarked_edited/serve2.csv)
+    (like data in plotting/markers/multi/1.csv)
 
-    Markers are assigned anatomical names from MARKER_ORDER by position.
+    Markers are assigned anatomical names from associated *_order.py sidecar, or from MARKER_ORDER if no sidecar is present.
 
     Args:
         filepath: path (str or Path) to a multi-marker Vicon CSV
@@ -94,11 +95,12 @@ def load_multi_serve(filepath):
     n_markers = (raw.shape[1] - 2) // 3
     order = _load_marker_order(filepath)
     if order is None:
-        print(f"  WARNING: no sidecar _order.py for {os.path.basename(filepath)}, falling back to MARKER_ORDER")
+        print(
+            f"  WARNING: no sidecar _order.py for {os.path.basename(filepath)}, falling back to MARKER_ORDER"
+        )
         order = MARKER_ORDER
     marker_names = [
-        order[i] if i < len(order) else f"unknown_{i + 1}"
-        for i in range(n_markers)
+        order[i] if i < len(order) else f"unknown_{i + 1}" for i in range(n_markers)
     ]
 
     data = raw.iloc[3:].reset_index(drop=True)
