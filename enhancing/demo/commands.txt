@@ -1,0 +1,6 @@
+1. Travel to the folder
+2. Paste: python format_data.py demo.csv
+3. Paste: python plot_serve.py L demo_formatted.csv
+4. Paste: python find_snapshots.py demo_snapshots.csv
+5. Paste: python plot_serve.py S demo_snapshots.csv
+May have to substitute python to own version (python3)
