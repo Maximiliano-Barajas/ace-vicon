@@ -184,5 +184,5 @@ def run(csv_path):
 
 
 if __name__ == "__main__":
-    csv_path = os.path.join(os.path.dirname(__file__), "multi", "6.csv")
+    csv_path = os.path.join(os.path.dirname(__file__), "biplav", "1.csv")
     run(csv_path)
