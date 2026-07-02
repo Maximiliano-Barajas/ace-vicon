@@ -1,48 +1,62 @@
 """
-ACE Tennis Serve Grader — Phase-Based
---------------------------------------
-Grades a customer's serve phase by phase, using the 8-phase legacy
-segmentation from serve_segmentation.py / result.py:
-
-    Start_Stance, Release, Loading, Cocking,
-    Acceleration, Contact, Deceleration, Finish
-
-Your partner's code computes joint angles per phase (from segmented
-Vicon marker data) and passes them in as a dict. This module compares
-those angles against a professional reference, scores each phase, and
-produces feedback.
-
-Expected input shape from your partner:
-
-    customer_data = {
-        "Start_Stance":  {"elbow": 170.0, "shoulder": 20.0, "hip": 175.0, "knee": 170.0, "wrist": 180.0},
-        "Release":       {"elbow": 160.0, "shoulder": 45.0, "hip": 170.0, "knee": 165.0, "wrist": 175.0},
-        "Loading":       {"elbow": 130.0, "shoulder": 90.0, "hip": 160.0, "knee": 130.0, "wrist": 170.0},
-        "Cocking":       {"elbow": 95.0,  "shoulder": 150.0,"hip": 150.0, "knee": 140.0, "wrist": 160.0},
-        "Acceleration":  {"elbow": 120.0, "shoulder": 120.0,"hip": 140.0, "knee": 150.0, "wrist": 150.0},
-        "Contact":       {"elbow": 175.0, "shoulder": 100.0,"hip": 130.0, "knee": 160.0, "wrist": 178.0},
-        "Deceleration":  {"elbow": 140.0, "shoulder": 60.0, "hip": 120.0, "knee": 155.0, "wrist": 140.0},
-        "Finish":        {"elbow": 90.0,  "shoulder": 30.0, "hip": 110.0, "knee": 165.0, "wrist": 100.0},
-    }
-
-Any joint missing for a phase is simply skipped in scoring — no need
-to provide all 5 angles for every phase if your partner doesn't have them.
-
+ACE Tennis Serve Grader — Elbow Angle, Phase-Based
+----------------------------------------------------
 File location: src/tennis_serve_grader.py
-(sibling to src/serve_analysis.py and src/serve_segmentation.py)
+
+Compares a customer's elbow angle at the start frame of each of the
+8 segmentation phases against the DTW barycenter (pro reference).
+
+The start frame of each phase is used as the "trophy position" for
+that phase — each phase boundary is anchored to a key biomechanical
+event by Max's segmentation pipeline (maximum_knee_bend,
+maximum_shoulder_external_rotation, etc.), making the start frame
+the most biomechanically significant moment in the phase.
+
+MARKER_ORDER column mapping (from dtw/constants.py):
+    right_shoulder = Marker 6 → columns 15, 16, 17
+    right_elbow    = Marker 3 → columns  6,  7,  8
+    right_hand     = Marker 8 → columns 21, 22, 23
+
+Pipeline:
+    barycenter2.npy (pro reference)
+        + SegmentationResult.phases (Max)
+        + customer angle array (Biplav/Devyn)
+        → grade_serve()
+        → print_report()
 """
 
+from __future__ import annotations
+
+import os
+import numpy as np
 from segmentation.result import PHASE_NAMES
 
 # ─────────────────────────────────────────────
-# 1. PHASE DEFINITIONS
-#    Pulled directly from Max's segmentation.result module so this
-#    grader always stays in sync with the actual phase names used
-#    by the segmentation pipeline — no duplicated/hardcoded tuple.
+# 1. MARKER COLUMN INDICES
+#    Derived from MARKER_ORDER in dtw/constants.py
+#    Each marker occupies 3 consecutive columns (TX, TY, TZ)
 # ─────────────────────────────────────────────
 
-# How much each phase contributes to the overall serve grade.
-# Cocking, Acceleration, and Contact matter most biomechanically.
+# marker index (0-based) × 3 = first column
+RSHO_COLS = slice(15, 18)   # right_shoulder (marker 6)
+RELB_COLS = slice(6,  9)    # right_elbow    (marker 3)
+RHAN_COLS = slice(21, 24)   # right_hand     (marker 8)
+
+# ─────────────────────────────────────────────
+# 2. BARYCENTER PATH
+#    Points to barycenter2.npy — DBA with dtw-python on individual/ serves
+#    Override by passing pro_barycenter= to grade_serve()
+# ─────────────────────────────────────────────
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_BARYCENTER = os.path.join(_HERE, "..", "dtw", "barycenter2.npy")
+
+# ─────────────────────────────────────────────
+# 3. PHASE WEIGHTS
+#    Cocking / Acceleration / Contact weighted highest —
+#    these phases contain the power-generating and ball-strike events.
+# ─────────────────────────────────────────────
+
 PHASE_WEIGHTS = {
     "Start_Stance":  0.05,
     "Release":       0.10,
@@ -54,26 +68,8 @@ PHASE_WEIGHTS = {
     "Finish":        0.05,
 }
 
-JOINTS = ("elbow", "shoulder", "hip", "knee", "wrist")
-
 # ─────────────────────────────────────────────
-# 2. PROFESSIONAL REFERENCE
-#    Replace with real pro angles per phase once available.
-# ─────────────────────────────────────────────
-
-PRO_REFERENCE = {
-    "Start_Stance":  {"elbow": 170.0, "shoulder": 20.0,  "hip": 175.0, "knee": 170.0, "wrist": 180.0},
-    "Release":       {"elbow": 160.0, "shoulder": 45.0,  "hip": 170.0, "knee": 165.0, "wrist": 175.0},
-    "Loading":       {"elbow": 130.0, "shoulder": 90.0,  "hip": 160.0, "knee": 130.0, "wrist": 170.0},
-    "Cocking":       {"elbow": 95.0,  "shoulder": 150.0, "hip": 150.0, "knee": 140.0, "wrist": 160.0},
-    "Acceleration":  {"elbow": 120.0, "shoulder": 120.0, "hip": 140.0, "knee": 150.0, "wrist": 150.0},
-    "Contact":       {"elbow": 175.0, "shoulder": 100.0, "hip": 130.0, "knee": 160.0, "wrist": 178.0},
-    "Deceleration":  {"elbow": 140.0, "shoulder": 60.0,  "hip": 120.0, "knee": 155.0, "wrist": 140.0},
-    "Finish":        {"elbow": 90.0,  "shoulder": 30.0,  "hip": 110.0, "knee": 165.0, "wrist": 100.0},
-}
-
-# ─────────────────────────────────────────────
-# 3. SCORING THRESHOLDS (degrees difference)
+# 4. SCORING THRESHOLDS (degrees difference)
 # ─────────────────────────────────────────────
 
 ANGLE_THRESHOLDS = [
@@ -82,6 +78,58 @@ ANGLE_THRESHOLDS = [
     (30,  60, "Fair"),
     (999, 35, "Poor"),
 ]
+
+TIER_ICON = {"Excellent": "✓", "Good": "~", "Fair": "!", "Poor": "✗"}
+
+# ─────────────────────────────────────────────
+# 5. PHASE-SPECIFIC FEEDBACK
+# ─────────────────────────────────────────────
+
+PHASE_CONTEXT = {
+    "Start_Stance":  "your starting stance and initial arm position",
+    "Release":       "your toss release — elbow should begin to rise",
+    "Loading":       "your loading phase — elbow pulls back as knees bend",
+    "Cocking":       "the trophy/cocking position — this is the key power-loading moment",
+    "Acceleration":  "your acceleration phase — elbow drives forward toward the ball",
+    "Contact":       "ball contact — elbow should be near full extension",
+    "Deceleration":  "your deceleration — controlled arm slowdown after contact",
+    "Finish":        "your follow-through and finish position",
+}
+
+FEEDBACK_TEMPLATES = {
+    "Excellent": "Elbow angle matches the pro at {phase_label} — excellent position.",
+    "Good":      "Elbow is slightly off at {phase_label}. Minor adjustment needed for {context}.",
+    "Fair":      "Elbow angle deviates noticeably at {phase_label}. Focus on {context}.",
+    "Poor":      "Elbow is significantly misaligned at {phase_label}. Prioritise drills for {context}.",
+}
+
+# ─────────────────────────────────────────────
+# 6. BIOMECHANICS HELPERS
+# ─────────────────────────────────────────────
+
+def compute_elbow_angle(frame: np.ndarray) -> float:
+    """
+    Compute the elbow angle (degrees) from a single barycenter frame.
+
+    Uses the right_shoulder → right_elbow → right_hand triplet.
+    The angle is computed at the elbow joint (vertex = right_elbow).
+
+    Args:
+        frame: 1D array of length 42 (one row of the barycenter)
+
+    Returns:
+        elbow angle in degrees
+    """
+    shoulder = frame[RSHO_COLS]
+    elbow    = frame[RELB_COLS]
+    hand     = frame[RHAN_COLS]
+
+    # Vectors from elbow to shoulder and elbow to hand
+    v1 = shoulder - elbow
+    v2 = hand     - elbow
+
+    cos_a = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-9)
+    return float(np.degrees(np.arccos(np.clip(cos_a, -1.0, 1.0))))
 
 
 def score_angle(diff_deg: float) -> tuple:
@@ -92,118 +140,81 @@ def score_angle(diff_deg: float) -> tuple:
 
 
 # ─────────────────────────────────────────────
-# 4. PHASE-SPECIFIC FEEDBACK
-#    Generic per-joint feedback, applied within each phase context.
+# 7. MAIN GRADING FUNCTION
 # ─────────────────────────────────────────────
 
-PHASE_FOCUS = {
-    "Start_Stance":  "balanced, stable base stance",
-    "Release":       "smooth toss release and early weight transfer",
-    "Loading":       "leg loading and shoulder turn",
-    "Cocking":       "maximum shoulder external rotation (the power-loading position)",
-    "Acceleration":  "rapid arm acceleration toward the ball",
-    "Contact":       "full extension at ball contact",
-    "Deceleration":  "controlled arm deceleration after contact",
-    "Finish":        "balanced landing and follow-through",
-}
-
-JOINT_FEEDBACK = {
-    "Excellent": "{joint} angle is right in line with the pro at this phase.",
-    "Good":      "{joint} angle is slightly off — minor adjustment needed.",
-    "Fair":      "{joint} angle deviates noticeably here, affecting {focus}.",
-    "Poor":      "{joint} angle is significantly off, which is likely hurting {focus}.",
-}
-
-
-# ─────────────────────────────────────────────
-# 5. GRADING ENGINE
-# ─────────────────────────────────────────────
-
-def grade_phase(phase_name: str, customer_angles: dict, pro_angles: dict) -> dict:
-    """Score a single phase by comparing each available joint angle."""
-    joint_results = {}
-
-    for joint in JOINTS:
-        c_val = customer_angles.get(joint)
-        p_val = pro_angles.get(joint)
-        if c_val is None or p_val is None:
-            continue
-
-        diff = abs(c_val - p_val)
-        score, tier = score_angle(diff)
-        feedback = JOINT_FEEDBACK[tier].format(
-            joint=joint.capitalize(), focus=PHASE_FOCUS[phase_name]
-        )
-
-        joint_results[joint] = {
-            "customer": c_val,
-            "pro": p_val,
-            "diff": round(diff, 1),
-            "score": score,
-            "tier": tier,
-            "feedback": feedback,
-        }
-
-    if not joint_results:
-        return {
-            "phase_score": None,
-            "joints": {},
-            "summary": f"No joint data provided for {phase_name}.",
-        }
-
-    phase_score = round(
-        sum(j["score"] for j in joint_results.values()) / len(joint_results), 1
-    )
-
-    return {
-        "phase_score": phase_score,
-        "joints": joint_results,
-        "summary": _phase_summary(phase_name, phase_score),
-    }
-
-
-def _phase_summary(phase_name: str, score: float) -> str:
-    if score >= 90:
-        return f"{phase_name.replace('_', ' ')}: Excellent — matches pro mechanics closely."
-    elif score >= 75:
-        return f"{phase_name.replace('_', ' ')}: Good — solid form with minor refinements needed."
-    elif score >= 60:
-        return f"{phase_name.replace('_', ' ')}: Fair — noticeable technique gaps in this phase."
-    else:
-        return f"{phase_name.replace('_', ' ')}: Poor — this phase needs focused practice."
-
-
-def grade_serve(customer_data: dict, pro_data: dict = None) -> dict:
+def grade_serve(
+    phase_start_frames: dict[str, int],
+    customer_elbow_angles: dict[str, float],
+    pro_barycenter: np.ndarray | str | None = None,
+) -> dict:
     """
-    Grade a full serve across all 8 phases.
+    Grade a customer's serve elbow angle at each phase's start frame.
 
     Parameters
     ----------
-    customer_data : dict — { phase_name: {joint: angle, ...}, ... }
-    pro_data      : dict — optional override of PRO_REFERENCE
+    phase_start_frames : dict
+        Maps phase name → start frame INDEX (not Vicon frame number).
+        Comes from Max's SegmentationResult — use phase_to_index_range()
+        to convert Vicon frames to indices first.
+        Example: {"Start_Stance": 0, "Release": 45, "Loading": 112, ...}
+
+    customer_elbow_angles : dict
+        Maps phase name → elbow angle (degrees) at that phase's start frame.
+        Computed by Biplav/Devyn from the customer's aligned marker data.
+        Example: {"Start_Stance": 168.0, "Release": 155.0, ...}
+
+    pro_barycenter : np.ndarray or str or None
+        The DTW barycenter array (n_frames, 42), a path to a .npy file,
+        or None to use the default barycenter2.npy.
 
     Returns
     -------
     dict with per-phase results, overall score, and overall grade
     """
-    if pro_data is None:
-        pro_data = PRO_REFERENCE
+    # Load barycenter if needed
+    if pro_barycenter is None:
+        pro_barycenter = np.load(DEFAULT_BARYCENTER)
+    elif isinstance(pro_barycenter, str):
+        pro_barycenter = np.load(pro_barycenter)
 
     results = {"phases": {}}
     weighted_total = 0.0
-    weight_used = 0.0
+    weight_used    = 0.0
 
     for phase in PHASE_NAMES:
-        customer_angles = customer_data.get(phase, {})
-        pro_angles = pro_data.get(phase, {})
+        start_idx      = phase_start_frames.get(phase)
+        customer_angle = customer_elbow_angles.get(phase)
 
-        phase_result = grade_phase(phase, customer_angles, pro_angles)
-        results["phases"][phase] = phase_result
+        if start_idx is None or customer_angle is None:
+            results["phases"][phase] = {"phase_score": None, "summary": f"{phase} — no data"}
+            continue
 
-        if phase_result["phase_score"] is not None:
-            w = PHASE_WEIGHTS[phase]
-            weighted_total += phase_result["phase_score"] * w
-            weight_used += w
+        # Extract pro elbow angle from barycenter at the phase start frame
+        start_idx = min(start_idx, len(pro_barycenter) - 1)
+        pro_angle = compute_elbow_angle(pro_barycenter[start_idx])
+
+        diff  = abs(customer_angle - pro_angle)
+        score, tier = score_angle(diff)
+
+        phase_label = phase.replace("_", " ")
+        feedback = FEEDBACK_TEMPLATES[tier].format(
+            phase_label=phase_label,
+            context=PHASE_CONTEXT[phase],
+        )
+
+        results["phases"][phase] = {
+            "customer_angle": round(customer_angle, 1),
+            "pro_angle":      round(pro_angle, 1),
+            "diff":           round(diff, 1),
+            "score":          score,
+            "tier":           tier,
+            "feedback":       feedback,
+        }
+
+        w = PHASE_WEIGHTS[phase]
+        weighted_total += score * w
+        weight_used    += w
 
     if weight_used == 0:
         results["overall_score"] = None
@@ -226,56 +237,160 @@ def grade_serve(customer_data: dict, pro_data: dict = None) -> dict:
 
 
 # ─────────────────────────────────────────────
-# 6. REPORT PRINTER
+# 8. REPORT PRINTER
 # ─────────────────────────────────────────────
-
-TIER_ICON = {"Excellent": "✓", "Good": "~", "Fair": "!", "Poor": "✗"}
-
 
 def print_report(results: dict) -> None:
     sep = "─" * 64
-    print(f"\n{'ACE TENNIS SERVE — PHASE-BY-PHASE REPORT':^64}")
+    print(f"\n{'ACE TENNIS SERVE — ELBOW ANGLE REPORT':^64}")
     print(sep)
 
     for phase in PHASE_NAMES:
-        phase_result = results["phases"].get(phase)
-        if not phase_result or phase_result["phase_score"] is None:
+        p = results["phases"].get(phase)
+        if not p or p.get("score") is None:
             print(f"\n  {phase.replace('_', ' ')}  — no data")
             continue
 
+        icon       = TIER_ICON[p["tier"]]
         weight_pct = int(PHASE_WEIGHTS[phase] * 100)
         print(f"\n  {phase.replace('_', ' ')}  ({weight_pct}% of grade)")
-        print(f"  Phase score: {phase_result['phase_score']}/100")
-
-        for joint, j in phase_result["joints"].items():
-            icon = TIER_ICON[j["tier"]]
-            print(f"    [{icon}] {joint.capitalize():9s} {j['customer']:>6.1f}°  "
-                  f"(pro: {j['pro']:.1f}°, diff: {j['diff']}°)  — {j['tier']}")
-
-        print(f"  → {phase_result['summary']}")
+        print(f"  [{icon}] {p['tier']:9s}  Score: {p['score']:3d}/100"
+              f"   Customer: {p['customer_angle']}°  Pro: {p['pro_angle']}°  Diff: {p['diff']}°")
+        print(f"      → {p['feedback']}")
 
     print(f"\n{sep}")
     print(f"  OVERALL SCORE : {results['overall_score']}/100")
     print(f"  GRADE         : {results['overall_grade']}")
     print(sep)
 
+    
+def align_to_barycenter(customer_array, barycenter):
+    """
+    Align a customer marker array to the barycenter timeline using DTW.
 
-# ─────────────────────────────────────────────
-# 7. EXAMPLE — replace with real values from your partner
-# ─────────────────────────────────────────────
+    The customer serve may be longer or shorter than the barycenter.
+    DTW finds the optimal warping path, then we resample the customer
+    frames onto the barycenter frame count so phase start indices are
+    directly comparable between customer and pro.
+
+    Parameters
+    ----------
+    customer_array : np.ndarray  shape (n_customer_frames, 42)
+    barycenter     : np.ndarray  shape (n_barycenter_frames, 42)
+
+    Returns
+    -------
+    np.ndarray shape (n_barycenter_frames, 42)
+    """
+    from dtw import dtw
+    from scipy.spatial.distance import cdist
+
+    print("Aligning customer serve to pro barycenter via DTW...")
+    dist_mat  = cdist(customer_array, barycenter)
+    alignment = dtw(dist_mat, distance_only=False)
+
+    n_bc  = barycenter.shape[0]
+    accum = [[] for _ in range(n_bc)]
+    for cust_idx, bc_idx in zip(alignment.index1, alignment.index2):
+        accum[bc_idx].append(customer_array[cust_idx])
+
+    aligned = np.zeros_like(barycenter)
+    for j in range(n_bc):
+        if accum[j]:
+            aligned[j] = np.mean(accum[j], axis=0)
+        else:
+            aligned[j] = customer_array[
+                alignment.index1[np.argmin(np.abs(alignment.index2 - j))]
+            ]
+
+    print(f"  Customer: {customer_array.shape[0]} frames -> aligned to {n_bc} frames")
+    return aligned
+
+
+def run_from_csv(serve_folder: str) -> dict:
+    """
+    Run the full grading pipeline on a real customer Vicon CSV folder.
+
+    Pipeline:
+        1. Load + clean the CSV (same process as pro serves)
+        2. DTW-align customer timeline to barycenter
+        3. Segment the serve into 8 phases
+        4. Extract elbow angle at each phase start frame
+        5. Grade against the pro barycenter
+    """
+    from segmentation.io import load_serve_from_folder
+    from segmentation.pipeline import segment_serve
+    from segmentation.result import phase_to_index_range
+    from prepare_data import interpolate_nans, filter_nan_frames, normalize_serve, convert
+
+    # Step 1: Load and clean
+    print(f"\nLoading customer serve from: {serve_folder}")
+    serve = load_serve_from_folder(serve_folder)
+    serve = filter_nan_frames(serve)
+    serve = interpolate_nans(serve)
+    serve = normalize_serve(serve)
+
+    # Step 2: DTW align to barycenter
+    barycenter    = np.load(DEFAULT_BARYCENTER)
+    marker_array  = convert(serve)
+    aligned_array = align_to_barycenter(marker_array, barycenter)
+
+    # Step 3: Segment (runs on original serve for signal quality)
+    print("Running segmentation...")
+    seg_result = segment_serve(serve)
+    if seg_result.warnings:
+        for w in seg_result.warnings:
+            print(f"  WARNING: {w}")
+    frames = seg_result.frames
+
+    # Step 4: Extract elbow angle at each phase start frame
+    phase_start_frames    = {}
+    customer_elbow_angles = {}
+    print("\nPhase start frames detected:")
+    for phase in PHASE_NAMES:
+        if phase not in seg_result.phases:
+            print(f"  {phase}: not found in segmentation")
+            continue
+        vicon_start, vicon_end = seg_result.phases[phase]
+        start_idx, _ = phase_to_index_range(frames, (vicon_start, vicon_end))
+        start_idx = min(start_idx, len(aligned_array) - 1)
+        elbow_angle = compute_elbow_angle(aligned_array[start_idx])
+        phase_start_frames[phase]    = start_idx
+        customer_elbow_angles[phase] = elbow_angle
+        print(f"  {phase:15s} start_idx={start_idx:4d}  elbow={elbow_angle:.1f}")
+
+    # Step 5: Grade
+    return grade_serve(phase_start_frames, customer_elbow_angles, barycenter)
+
+
+def run_dummy() -> dict:
+    """Run grader with dummy data for testing without a real CSV."""
+    dummy_phase_starts = {
+        "Start_Stance": 0,   "Release": 45,  "Loading": 112,
+        "Cocking": 140,      "Acceleration": 160, "Contact": 195,
+        "Deceleration": 196, "Finish": 240,
+    }
+    dummy_customer_angles = {
+        "Start_Stance": 168.0, "Release": 155.0, "Loading": 125.0,
+        "Cocking": 110.0,      "Acceleration": 128.0, "Contact": 172.0,
+        "Deceleration": 145.0, "Finish": 95.0,
+    }
+    return grade_serve(dummy_phase_starts, dummy_customer_angles)
+
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="ACE Tennis Serve Grader")
+    parser.add_argument(
+        "--csv", metavar="FOLDER", default=None,
+        help="Path to customer Vicon serve folder. Omit to use dummy data.",
+    )
+    args = parser.parse_args()
 
-    customer_data = {
-        "Start_Stance":  {"elbow": 168.0, "shoulder": 22.0, "hip": 172.0, "knee": 168.0, "wrist": 178.0},
-        "Release":       {"elbow": 155.0, "shoulder": 50.0, "hip": 168.0, "knee": 160.0, "wrist": 172.0},
-        "Loading":       {"elbow": 125.0, "shoulder": 95.0, "hip": 155.0, "knee": 122.0, "wrist": 165.0},
-        "Cocking":       {"elbow": 110.0, "shoulder": 132.0,"hip": 148.0, "knee": 138.0, "wrist": 158.0},
-        "Acceleration":  {"elbow": 128.0, "shoulder": 110.0,"hip": 142.0, "knee": 148.0, "wrist": 148.0},
-        "Contact":       {"elbow": 172.0, "shoulder": 96.0, "hip": 128.0, "knee": 158.0, "wrist": 175.0},
-        "Deceleration":  {"elbow": 145.0, "shoulder": 65.0, "hip": 118.0, "knee": 150.0, "wrist": 135.0},
-        "Finish":        {"elbow": 95.0,  "shoulder": 35.0, "hip": 108.0, "knee": 160.0, "wrist": 105.0},
-    }
+    if args.csv:
+        results = run_from_csv(args.csv)
+    else:
+        print("No CSV provided — running with dummy data.")
+        results = run_dummy()
 
-    results = grade_serve(customer_data)
     print_report(results)
