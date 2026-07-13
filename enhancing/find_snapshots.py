@@ -12,9 +12,11 @@ import pandas as pd
 
 SNAPSHOT_NAMES = [
     'start_pose',
+    'hand_cross',
     'flat_racket_arm',
     'peak_racket_arm',
     'contact',
+    'hand_cross_2',
     'racket_deceleration',
     'finish_pose',
 ]
@@ -116,15 +118,11 @@ def find_snapshots(df, tz_cols, part_names, peaks):
     snapshots['start_pose'] = int(df['Frame'].iloc[start_idx])
     print(f"  -> start_pose:          frame {snapshots['start_pose']}  (df idx {start_idx})")
 
-    # ── 2. flat_racket_arm ─────────────────────────────────────────────────────
-    # Step A: wait for left_hand_TZ and right_hand_TZ to intercept (cross)
-    # Step B: from that intercept point ONLY, find |right_hand_TZ - right_elbow_TZ| <= 1mm
-    flat_idx = start_idx  # fallback if lh_tz unavailable
-
+    # ── 2. hand_cross ──────────────────────────────────────────────────────────
+    # Frame where left_hand_TZ and right_hand_TZ intercept (cross) — the toss
+    # hand descending as the racket hand rises. Must happen before peak2 (contact).
+    intercept_idx = None
     if lh_tz is not None:
-        # Step A: find intercept — left_hand_TZ and right_hand_TZ cross
-        # Must happen before peak2 (contact)
-        intercept_idx = None
         for i in range(start_idx + 1, p2_idx + 1):
             if np.isnan(lh_tz[i]) or np.isnan(rh_tz[i]):
                 continue
@@ -136,16 +134,25 @@ def find_snapshots(df, tz_cols, part_names, peaks):
                 intercept_idx = i
                 break
 
+    if intercept_idx is None:
+        snapshots['hand_cross'] = 0
+        print(f"  -> hand_cross:          NOT FOUND before contact — skipping hand_cross, flat_racket_arm, and peak_racket_arm")
+    else:
+        snapshots['hand_cross'] = int(df['Frame'].iloc[intercept_idx])
+        print(f"  -> hand_cross:          frame {snapshots['hand_cross']}  (df idx {intercept_idx})")
+
+    # ── 3. flat_racket_arm ─────────────────────────────────────────────────────
+    # From hand_cross onward, find |right_hand_TZ - right_elbow_TZ| <= 5mm
+    flat_idx = start_idx  # fallback if lh_tz unavailable
+
+    if lh_tz is not None:
         if intercept_idx is None:
-            print(f"     LH/RH intercept: NOT FOUND before contact — skipping flat_racket_arm and peak_racket_arm")
             snapshots['flat_racket_arm'] = 0
             snapshots['peak_racket_arm'] = 0
-            print(f"  -> flat_racket_arm:     SKIPPED (no LH/RH intercept before contact)")
+            print(f"  -> flat_racket_arm:     SKIPPED (no hand_cross before contact)")
             print(f"  -> peak_racket_arm:     SKIPPED")
         else:
-            print(f"     LH/RH intercept at df idx {intercept_idx}  frame {int(df['Frame'].iloc[intercept_idx])}")
-
-            # Step B: from intercept, find |right_hand_TZ - right_elbow_TZ| <= 1mm
+            # From intercept, find |right_hand_TZ - right_elbow_TZ| <= 1mm
             # Must happen before peak2
             flat_idx = None
             for i in range(intercept_idx + 1, p2_idx + 1):
@@ -167,7 +174,7 @@ def find_snapshots(df, tz_cols, part_names, peaks):
                 print(f"  -> flat_racket_arm:     frame {snapshots['flat_racket_arm']}  (df idx {flat_idx})")
                 print(f"     CHECK: right_hand_TZ = {rh_val:.2f} mm  |  right_elbow_TZ = {re_val:.2f} mm  |  diff = {abs(rh_val - re_val):.2f} mm")
 
-                # ── 3. peak_racket_arm ─────────────────────────────────────────
+                # ── 4. peak_racket_arm ─────────────────────────────────────────
                 # Scan forward from flat_idx: right hand descending then turns back up
                 # Must happen before peak2
                 peak_racket_idx = None
@@ -196,7 +203,7 @@ def find_snapshots(df, tz_cols, part_names, peaks):
 
     search_from = peak_racket_idx_final if peak_racket_idx_final is not None else p2_idx
 
-    # ── 4. contact ─────────────────────────────────────────────────────────────
+    # ── 5. contact ─────────────────────────────────────────────────────────────
     # Scan FORWARD from search_from: frame where right_hand_TZ is maximum
     contact_idx = search_from
     max_val = -np.inf
@@ -209,7 +216,32 @@ def find_snapshots(df, tz_cols, part_names, peaks):
     snapshots['contact'] = int(df['Frame'].iloc[contact_idx])
     print(f"  -> contact:             frame {snapshots['contact']}  (df idx {contact_idx})")
 
-    # ── 5. racket_deceleration ─────────────────────────────────────────────────
+    # ── 6. hand_cross_2 ────────────────────────────────────────────────────────
+    # Same LH/RH intercept logic as hand_cross, but searched forward from
+    # contact to the end of the file — the hands crossing again during
+    # follow-through as the toss arm comes back down and the racket arm
+    # continues past contact.
+    intercept2_idx = None
+    if lh_tz is not None:
+        for i in range(contact_idx + 1, last_idx + 1):
+            if np.isnan(lh_tz[i]) or np.isnan(rh_tz[i]):
+                continue
+            if np.isnan(lh_tz[i - 1]) or np.isnan(rh_tz[i - 1]):
+                continue
+            diff_prev = lh_tz[i - 1] - rh_tz[i - 1]
+            diff_curr = lh_tz[i]     - rh_tz[i]
+            if diff_prev * diff_curr <= 0:
+                intercept2_idx = i
+                break
+
+    if intercept2_idx is None:
+        snapshots['hand_cross_2'] = 0
+        print(f"  -> hand_cross_2:        NOT FOUND after contact — skipping")
+    else:
+        snapshots['hand_cross_2'] = int(df['Frame'].iloc[intercept2_idx])
+        print(f"  -> hand_cross_2:        frame {snapshots['hand_cross_2']}  (df idx {intercept2_idx})")
+
+    # ── 7. racket_deceleration ─────────────────────────────────────────────────
     # Scan FORWARD from contact_idx+1 → last_idx:
     # first frame |right_hand_TZ - right_elbow_TZ| <= threshold
     decel_idx = contact_idx
@@ -222,7 +254,7 @@ def find_snapshots(df, tz_cols, part_names, peaks):
     snapshots['racket_deceleration'] = int(df['Frame'].iloc[decel_idx])
     print(f"  -> racket_deceleration: frame {snapshots['racket_deceleration']}  (df idx {decel_idx})")
 
-    # ── 6. finish_pose ─────────────────────────────────────────────────────────
+    # ── 8. finish_pose ─────────────────────────────────────────────────────────
     # Scan FORWARD from decel_idx+1 → last_idx:
     # right hand descending, then first frame it turns back up (local min)
     finish_idx = decel_idx
@@ -240,21 +272,33 @@ def find_snapshots(df, tz_cols, part_names, peaks):
 
     return snapshots
 
-    return snapshots
-
 
 def write_snapshots_back(filepath, lines, meta_end, snapshots):
     output_lines = []
+    snapshot_block_written = False
+
     for i in range(meta_end):
-        line = lines[i].strip()
-        if line.startswith("SNAPSHOT="):
-            name = line.split('=')[1].split(',')[0].strip()
+        line = lines[i]
+        s = line.strip()
+        if s.startswith("SNAPSHOT="):
+            if not snapshot_block_written:
+                # Emit the full snapshot block here, in canonical SNAPSHOT_NAMES
+                # order, replacing whatever set/order of SNAPSHOT= lines the
+                # file had before (handles older files missing newer names,
+                # e.g. hand_cross, and keeps them in the right sequence).
+                for name in SNAPSHOT_NAMES:
+                    if name in snapshots:
+                        output_lines.append(f"SNAPSHOT={name},{snapshots[name]}\n")
+                snapshot_block_written = True
+            # skip original SNAPSHOT= lines individually -- already emitted above
+            continue
+        output_lines.append(line)
+
+    if not snapshot_block_written:
+        # File had no SNAPSHOT= lines at all -- insert the block before the data header
+        for name in SNAPSHOT_NAMES:
             if name in snapshots:
                 output_lines.append(f"SNAPSHOT={name},{snapshots[name]}\n")
-            else:
-                output_lines.append(lines[i])
-        else:
-            output_lines.append(lines[i])
 
     output_lines.extend(lines[meta_end:])
     with open(filepath, 'w', encoding='utf-8') as f:

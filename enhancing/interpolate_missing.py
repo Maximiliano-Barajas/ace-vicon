@@ -16,11 +16,11 @@ Behavior:
     on BOTH sides gets linearly interpolated.
   - A column that is entirely NaN (marker never tracked at all) is left
     alone -- there's nothing to interpolate from.
-  - Leading/trailing NaN runs (marker drops out before the first or after
-    the last valid frame) get filled with the nearest valid value, since
-    np.interp holds the boundary value constant outside its known range.
-    This is the same behavior interpolate_nans() already has -- flagged
-    here so it doesn't surprise you.
+  - Leading/trailing NaN runs (marker drops out before the first valid
+    frame, or after the last valid frame, and never comes back) are left
+    as NaN. There's no reference point on one side, so rather than
+    flat-filling with the nearest valid value (np.interp's default
+    out-of-range behavior), these are deliberately left missing.
 
 Usage:
     python interpolate_missing.py <path_to_formatted_csv>
@@ -72,14 +72,18 @@ def read_formatted_csv(filepath):
 
 
 def interpolate_missing(df, columns):
-    """Linearly interpolate NaNs in every marker/axis column.
+    """Linearly interpolate NaNs in every marker/axis column, but only
+    where a gap has valid data on BOTH sides. Leading/trailing NaN runs
+    (no reference on one side) are left as NaN rather than flat-filled.
 
     Columns that are entirely NaN are left unchanged. Returns the filled
-    DataFrame plus a per-column count of values filled in, for reporting.
+    DataFrame plus a per-column count of values filled in (and a count of
+    edge-NaNs left alone), for reporting.
     """
     x = df['Frame'].values.astype(float)
     filled = df.copy()
     fill_counts = {}
+    edge_counts = {}
 
     for col in columns:
         if col in ('Frame', 'SubFrame'):
@@ -92,13 +96,30 @@ def interpolate_missing(df, columns):
         if nans.all():
             print(f"  SKIPPED {col}: entirely missing ({n_missing} frames) -- can't interpolate")
             continue
-        y = y.copy()
-        y[nans] = np.interp(x[nans], x[~nans], y[~nans])
-        filled[col] = y
-        fill_counts[col] = n_missing
-        print(f"  filled {col:<22} {n_missing} missing frame(s)")
 
-    return filled, fill_counts
+        valid_idx = np.where(~nans)[0]
+        first_valid, last_valid = valid_idx[0], valid_idx[-1]
+
+        # Only interpolate NaNs strictly between the first and last valid frame
+        interior = nans & (np.arange(len(y)) > first_valid) & (np.arange(len(y)) < last_valid)
+        n_interior = int(interior.sum())
+        n_edge = n_missing - n_interior
+
+        if n_interior > 0:
+            y = y.copy()
+            y[interior] = np.interp(x[interior], x[~nans], y[~nans])
+            filled[col] = y
+            fill_counts[col] = n_interior
+
+        if n_edge > 0:
+            edge_counts[col] = n_edge
+
+        msg = f"  {col:<22} {n_interior} interior missing frame(s) filled"
+        if n_edge > 0:
+            msg += f", {n_edge} leading/trailing frame(s) left as NaN"
+        print(msg)
+
+    return filled, fill_counts, edge_counts
 
 
 def write_back(filepath, lines, meta_end, df, columns):
@@ -136,13 +157,19 @@ def main():
     print(f"      {len(df)} frames | {len(columns) - 2} marker/axis columns")
 
     print("\n[2/3] Interpolating missing values...")
-    df_filled, fill_counts = interpolate_missing(df, columns)
+    df_filled, fill_counts, edge_counts = interpolate_missing(df, columns)
 
-    if not fill_counts:
+    if not fill_counts and not edge_counts:
         print("  No missing values found -- nothing to do.")
     else:
         total = sum(fill_counts.values())
-        print(f"\n  Filled {total} missing value(s) across {len(fill_counts)} column(s).")
+        print(f"\n  Filled {total} interior missing value(s) across {len(fill_counts)} column(s).")
+        if edge_counts:
+            total_edge = sum(edge_counts.values())
+            print(f"  Left {total_edge} leading/trailing value(s) as NaN across {len(edge_counts)} column(s) "
+                  f"(no reference on one side):")
+            for col, n in edge_counts.items():
+                print(f"    {col:<22} {n} frame(s)")
 
     print(f"\n[3/3] Saving...")
     write_back(filepath, lines, meta_end, df_filled, columns)
